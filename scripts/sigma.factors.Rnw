@@ -1,0 +1,25 @@
+\documentclass{article}
+\usepackage{parskip} % puts a line between paragraphs and doesn't indent.
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage[superscript,nomove]{cite}
+\begin{document}
+\author{Ben Temperton}
+\date{}
+\title{Genome Streamlining and the loss of $\sigma$-factors}
+\maketitle
+\section{Introduction}
+$\sigma$-factors are polypeptides that combine with DNA-dependent RNA polymerase (RNAP) to form an RNAP holoenzyme capable of transcribing the DNA template. The role of the $\sigma$-factor in the holoenzyme is two-fold: (i) RNAP is unable to initiate transcription without the $\sigma$-factor. (ii) The $\sigma$-subunit of the RNAP holoenzyme can recognize specific promotor sequences and can thus direct initiation of transcription to specific genes, orchestrating a metabolic and/or physiological response to changing environments\cite{FMR:FMR127}. 
+
+$\sigma$-factors control a broad range of processes. Housekeeping $\sigma$-factors, such as $\sigma^{70}$ in \em{Escherichia coli} (encoded by \em{rpoD}) are responsible for the transcription of most genes expressed in exponentially growing cells and it is thought that at least one copy of a $\sigma^{70}$-like homolog can be found in all bacterial genomes. Other non-essential $\sigma$-factors include stationary phase $\sigma$-factors (RpoS); flagellar $\sigma$-factors ($\sigma^{28}$, WhiG); heat-shock $\sigma$-factors ($\sigma^{32}$, SigB/C); sporulation $\sigma$-factors; nitrogen utilization $\sigma$-factors ($\sigma^{54}$); and a broad range of extracytoplasmic function (ECF) $\sigma$-factors controlling expression of, among other things, alginate biosynthesis, iron uptake, antibiotic production and virulence factors.
+
+\section{Method}
+\subsection{Identifying sigma-factor homologs in bacterial genomes}
+
+\section{Results}
+
+\section{Conclusion}
+
+\bibliography{sigma.factors.bib}
+\bibliographystyle{unsrt}
+\end{document}
