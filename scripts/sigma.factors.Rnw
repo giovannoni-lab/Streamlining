@@ -6,6 +6,12 @@
 \begin{document}
 \author{Ben Temperton}
 \date{}
+%this setup uses functions in .Rprofile from http://biostat.mc.vanderbilt.edu/wiki/Main/KnitrHowto#Plots
+<<echo=FALSE>>==
+suppressMessages(library(ape))
+suppressMessages(library(plyr))
+options(width=60, digits=3)
+@
 \title{Genome Streamlining and the loss of $\sigma$-factors}
 \maketitle
 \section{Introduction}
@@ -13,7 +19,142 @@ $\sigma$-factors are polypeptides that combine with DNA-dependent RNA polymerase
 
 $\sigma$-factors control a broad range of processes. Housekeeping $\sigma$-factors, such as $\sigma^{70}$ in \em{Escherichia coli} (encoded by \em{rpoD}) are responsible for the transcription of most genes expressed in exponentially growing cells and it is thought that at least one copy of a $\sigma^{70}$-like homolog can be found in all bacterial genomes. Other non-essential $\sigma$-factors include stationary phase $\sigma$-factors (RpoS); flagellar $\sigma$-factors ($\sigma^{28}$, WhiG); heat-shock $\sigma$-factors ($\sigma^{32}$, SigB/C); sporulation $\sigma$-factors; nitrogen utilization $\sigma$-factors ($\sigma^{54}$); and a broad range of extracytoplasmic function (ECF) $\sigma$-factors controlling expression of, among other things, alginate biosynthesis, iron uptake, antibiotic production and virulence factors.
 
+Under genome streamlining theory, as niche complexity decreases, so too does the number of adaptive patahways required to occupy that niche. Because of the global nature of $\sigma$-regulation, loss of $\sigma$-factors as a result of genome streamlining may result from several mechanisms:
+\begin{itemize}
+  \item If one or more of the genes previously under $\sigma$-regulation become constitutive, the $\sigma$-factor must be maintained until such time as all regulated genes are either lost or made constitutive
+  \item If all genes previously under  $\sigma$-regulation are no longer required in a niche of lower complexity, then selective pressure on all regulated genes, \emph{including the $\sigma$-factor} is relaxed, leading to a rapid loss of function and step-wise genome reduction.
+\end{itemize}
+
+Therefore, unlike e.g. loss of specific transporters, or virulence factors, a reduction of $\sigma$-factors in streamlined genomes would serve an indicator that entire pathways have either been lost or rendered constitutive. 
+
 \section{Method}
+\subsection{Identifying best representative SFam Hidden Markov models for $\sigma$-factors}
+The number of $\sigma$-factor homologs in streamlined and non-streamlined bacterial genomes in the \href{https://img.jgi.doe.gov/cgi-bin/er/main.cgi}{IMG v400} database was evaluated as follows:
+
+<<uniprot.taxa, tidy=TRUE>>=
+uniprot<-read.delim('../data/uniprot.sigma.factors.tab')
+@
+
+A search for the keyword 'sigma factor' in \href{http://www.uniprot.org/uniprot/?query=keyword\%3AKW-0731&format=*}{Uniprot} resulted in 71,070 results, of which 255 had been reviewed. To restrict the search to bacterial $\sigma$-factors, 7 sequences from Caudovirales and  6 from \emph{Arabidopsis thaliana} were removed, leaving 242 $\sigma$-factor sequences from \Sexpr{length(unique(uniprot$Organism))} unique organisms:
+
+%\begin{figure}
+\includegraphics[width=0.9\textwidth]{../images/sig_factor_pie.png}
+%\label{fig:uniprot.pie}
+%\end{figure}
+
+Each of the 242 $\sigma$-factor sequences was assigned a best-hit HMM model from Sifting Families\cite{Sharpton:2012kv}:
+
+<<hmmsearch, tidy=TRUE>>=
+system(paste('hmmsearch',  '-o uniprot.sigma.factor.vs.sfam.txt', '--tblout uniprot.sigma.factor.vs.sfam.tbl','--notextw', '-E 1e-5', '--cpu 8', 'sfam.hmm uniprot.sigma.factors.faa'))
+@
+Tabulate the output from HMMER space-separated format:
+<<engine='python',eval=TRUE, tidy=TRUE>>=
+outfile=open('../data/uniprot.sigma.factor.vs.sfam.formatted.tbl', 'w')
+with open('../data/uniprot.sigma.factor.vs.sfam.tbl') as handle:
+  for line in handle.readlines():
+    if line.startswith('#'):
+      continue
+    bits = line.split()[0:17]
+    outfile.write('%s\n'% '\t'.join(bits))
+outfile.close()
+@
+Now let's pull out the best-hit SFams for each Uniprot reviewed $\sigma$-factor:
+<<tidy=TRUE>>=
+sfam.data<-read.delim('../data/uniprot.sigma.factor.vs.sfam.formatted.tbl', header=FALSE)
+sfam.data<-sfam.data[c(1,3,5:10)]
+colnames(sfam.data)<-c('target.name', 'query.name', 'full.e.value', 'full.score', 'full.bias', 'best.e.value', 'best.score', 'best.bias')
+sfam.data.agg<-aggregate(full.score~target.name, sfam.data, max)
+sfam.best.model <-merge(sfam.data.agg, sfam.data)
+sfam.best.model$query.name<-as.character(sfam.best.model$query.name)
+rm(sfam.data)
+rm(sfam.data.agg)
+@
+From 242 reviewed Uniprot $\sigma$-factor sequences, we identified \Sexpr{length(unique(sfam.best.model$query.name))} different SFam HMMs.
+\subsection{Validating the SFam HMMs for cross-function}
+We need to do a sanity-check to make sure that the sequences used to construct each of the \Sexpr{length(unique(sfam.best.model$query.name))} SFam HMMs only include sequences either identified as $\sigma$-factors or hypothetical proteins. Each SFam consists of a phylogenetic tree with branch tips associated with a protein in IMG, as shown in Figure \ref{fig:example.tree}. We can find the COG annotation of each member of a tree with a bit of file parsing of the IMG v400 database:
+
+First, we need to find out how many members are in ALL trees to create a dataframe:
+<<tidy=TRUE>>=
+N_size = 0
+for(i in unique(sfam.best.model$query.name)){
+  tree_name<-paste('../data/trees/', i, '.tree', sep='')
+  MyTree <- read.tree(tree_name)
+  tips<-MyTree$tip.label
+  N_size<- N_size + length(MyTree$tip.label)
+}
+@
+
+This gives us a total of \Sexpr{N_size} protein sequences from IMG v400. Now we can create a data.frame to hold the COG mappings, and write out the IMG ids for some python-esque parsing:
+
+<<tidy=TRUE, eval=FALSE>>= %this needs to be evaluated to be fully runnable
+img.reviewed.sfam.map<-data.frame(sfam.id=character(N_size), img.id=character(N_size), stringsAsFactors=FALSE)
+row_count = 1
+for(i in unique(sfam.best.model$query.name)){
+  tree_name<-paste('../data/trees/', i, '.tree', sep='')
+  MyTree <- read.tree(tree_name)
+  tips<-MyTree$tip.label
+  for (j in tips){
+    img.reviewed.sfam.map[row_count, ]<-c(i, j)
+    row_count<-row_count + 1
+  }
+}
+write.table(img.reviewed.sfam.map$img.id, '../data/img.reviewed.sigma.ids', sep='\t', row.names=FALSE, quote=FALSE, col.names=FALSE)
+@
+
+For each IMG id, let's get the species and the annotation.
+<<eval=FALSE, tidy=TRUE>>=
+cat img.reviewed.sigma.ids | sed 's/^/lcl|/g' | blastdbcmd -entry_batch - -outfmt %t -db /ubique2/common/img_v400/img_v400_PROT | sed 's/\([0-9]\+\)\s\+\(.*\)\s\+\[\(.*\)\].*/\1\t\2\t\3/g' >> img.reviewed.sigma.anno
+@
+<<echo=FALSE>>=
+img.reviewed.sigma.anno<-read.delim('../data/img.reviewed.sigma.anno', header=FALSE)
+@
+Out of \Sexpr{N_size} initial IMG ids, \Sexpr{N_size-nrow(img.reviewed.sigma.anno)} were not found in the IMG database. Now, we need to map the IMG species ID to each of the remaining $\sigma$-factor ids in ipython:
+<<eval=FALSE, engine='python'>>=
+ipython
+ids = !cat img.reviewed.sigma.anno | cut -f 3
+species_map = dict()
+with open('00.taxon.tab.txt', 'rU') as handle:
+  for l in handle.readlines():
+    bits = l.split('\t')
+    species_map[bits[2]] = '%s\t%s' % (bits[0], bits[3])
+outfile = open('../data/img.reviewed.species.map', 'w')
+outfile.write('img.species.id\timg.species.desc\timg.species.domain\n')
+
+for i in ids:
+  try:
+    bits = species_map[i].split('\t')
+    outfile.write('%s\t%s\t%s\n' % (bits[0], i, bits[1]))
+  except KeyError:
+    pass
+outfile.close()
+@
+Now we can map the two together and prepare the file to identify COGs
+<<tidy=TRUE>>=
+img.reviewed.sigma.anno<-read.delim('../data/img.reviewed.sigma.anno', header=FALSE)
+colnames(img.reviewed.sigma.anno)<-c('img.id','img.desc','img.species.desc')
+img.reviewed.species.map<-read.delim('../data/img.reviewed.species.map')
+tmp<-join(img.reviewed.sfam.map, img.reviewed.sigma.anno, by=c('img.id'))
+tmp2<-join(tmp, img.reviewed.species.map, 'left', by='img.species.desc',match='first')
+img.reviewed.sfam.map<-tmp2
+write.table(img.reviewed.sfam.map, '../data/img.reviewed.sfam.map', sep='\t', row.names=FALSE, col.names=FALSE, quote=FALSE)
+rm(tmp);rm(tmp2)
+@
+
+
+
+
+
+
+
+<<example.tree, fig.show='asis', fig.width=4, fig.cap='Example phylogenetic tree used to create SFam 18122', echo=FALSE>>=
+plot.phylo(read.tree('../data/trees/18122.tree'), cex=0.7)
+@
+
+
+
+
+
+
 \subsection{Identifying sigma-factor homologs in bacterial genomes}
 
 \section{Results}
