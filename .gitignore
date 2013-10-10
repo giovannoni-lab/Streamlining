@@ -19,3 +19,9 @@ scripts/sigma.factors-concordance.tex
 analysis.Rproj
 
 scripts/sfam.analysis.r
+
+scripts/texput.log
+
+scripts/example_tree.pdf
+
+scripts/figure/example_tree.pdf

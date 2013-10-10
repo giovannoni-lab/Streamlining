@@ -10,6 +10,7 @@
 <<echo=FALSE>>==
 suppressMessages(library(ape))
 suppressMessages(library(plyr))
+suppressMessages(library(xtable))
 options(width=60, digits=3)
 @
 \title{Genome Streamlining and the loss of $\sigma$-factors}
@@ -129,33 +130,93 @@ for i in ids:
 outfile.close()
 @
 Now we can map the two together and prepare the file to identify COGs
-<<tidy=TRUE>>=
+<<tidy=TRUE, eval=FALSE>>=
 img.reviewed.sigma.anno<-read.delim('../data/img.reviewed.sigma.anno', header=FALSE)
 colnames(img.reviewed.sigma.anno)<-c('img.id','img.desc','img.species.desc')
 img.reviewed.species.map<-read.delim('../data/img.reviewed.species.map')
 tmp<-join(img.reviewed.sfam.map, img.reviewed.sigma.anno, by=c('img.id'))
 tmp2<-join(tmp, img.reviewed.species.map, 'left', by='img.species.desc',match='first')
-img.reviewed.sfam.map<-tmp2
+
+img.reviewed.sfam.map<-na.omit(tmp2)
 write.table(img.reviewed.sfam.map, '../data/img.reviewed.sfam.map', sep='\t', row.names=FALSE, col.names=FALSE, quote=FALSE)
 rm(tmp);rm(tmp2)
 @
+Now some more ipython magic to get the COG and the gene length of each $\sigma$-factor:
+<<eval=FALSE, engine='python'>>=
+ipython
+import os
+lines  = !cat ../data/img.reviewed.sfam.map
+outfile = open('../data/img.reviewed.cog.map', 'w')
+outfile.write('img.id\tcog.id\tgene.length\n')
+for l in lines:
+  l = l.strip()
+  bits = l.split('\t')
+	img_id = bits[2]
+	img_species_id = bits[4]
+	path_name_to_cog = 'img_v400/uncompressed_files/%s/%s.cog.tab.txt' % (img_species_id, img_species_id)
+	cog_id = 'NA'
+	gene_length='NA'
+	if os.path.exists(path_name_to_cog):
+    matching_line = !grep $img_id $path_name_to_cog
+		if len(matching_line) > 0 and len(matching_line[0]) >0:
+			matching_line = matching_line[0].strip()
+			bits = matching_line.split('\t')
+			cog_id = bits[9]
+			gene_length=bits[1]
+	outfile.write('%s\t%s\t%s\n' % (img_id, cog_id, gene_length))
+outfile.close()
+@
+Finally, we can build the COG mapping:
+<<tidy=TRUE, eval=FALSE>>=
+img.reviewed.cog.map<-read.delim('../data/img.reviewed.cog.map')
+img.reviewed.cog.map$img.id<-as.character(img.reviewed.cog.map$img.id)
+tmp3<-join(img.reviewed.sfam.map, img.reviewed.cog.map, by=c('img.id'))
+img.reviewed.sfam.map<-tmp3
+rm(tmp3)
+write.table(na.omit(img.reviewed.sfam.map), '../data/final.img.sigma.data.txt',sep='\t',row.names=FALSE, quote=FALSE)
+@
+<<echo=FALSE>>=
+img.reviewed.sfam.map<-read.delim('../data/final.img.sigma.data.txt')
+@
+We now have \Sexpr{length(unique(img.reviewed.sfam.map$sfam.id))} which can be successfully mapped to \Sexpr{length(unique(img.reviewed.sfam.map$cog.id))} COG ids. If any SFam families have more than 1 COG associated with them, we want to manually check them out:
 
+<<tidy=TRUE>>=
+cog.count<-with(na.omit(img.reviewed.sfam.map), tapply(cog.id, sfam.id, function(x)length(unique(x))))
+to.check<-cog.count[cog.count>1]
+@
 
+\Sexpr{nrow(to.check)} SFams contained more than 1 COG:
+\begin{itemize}
+  \item SFam\_14256 and SFam\_27359 contained both COG1595 and COG1191
+  \item SFam\_3892 contained both COG1191 and COG0568
+  \item SFam\_346494 contained COG1595,COG1191 and COG0568 
+  \item SFam\_346925 also contained these COGs as well as COG1348 and COG4941
+\end{itemize}  
+The member of SFam\_346925 annotated as COG1348 was 'chlorophyllide reductase iron protein subunit X' from \emph{Chloroherpeton thalassium} ATCC 35110. This protein contains a $\sigma^{70}$-like domain identified by PFam family PF08281. Two sequences in SFam\_346925 were annotated as COG4941 - both classified as putative sigma factors by IMG. This SFam also contains \Sexpr{nrow(img.reviewed.sfam.map[img.reviewed.sfam.map$sfam.id=='346925', ])} sequences, of which the vast majority were COG1595:
+<<echo=FALSE, results='asis'>>=
+cogs<-summary(img.reviewed.sfam.map[img.reviewed.sfam.map$sfam.id=='346925', 'cog.id' ])
+m<-matrix(cogs)
+colnames(m)<-c('count')
+rownames(m)<-names(cogs)
+m<-t(m)
+print(xtable(m, caption='COG members of SFam 346925'))
+@
 
-
-
-
+Therefore, it was decided that there was no evidence of cross-function in the \Sexpr{length(unique(img.reviewed.sfam.map$sfam.id))} identified SFams and that these SFams could successfully be used to identify $\sigma$-factors in IMG bacterial genomes without an abundance of false positives.
 
 <<example.tree, fig.show='asis', fig.width=4, fig.cap='Example phylogenetic tree used to create SFam 18122', echo=FALSE>>=
 plot.phylo(read.tree('../data/trees/18122.tree'), cex=0.7)
 @
 
 
-
-
-
-
 \subsection{Identifying sigma-factor homologs in bacterial genomes}
+The \Sexpr{length(unique(img.reviewed.sfam.map$sfam.id))} SFam families identified above were extracted from the full SFam library:
+<<tidy=TRUE, eval=FALSE>>=
+write.table(unique(img.reviewed.sfam.map$sfam.id), '../data/reviewed.sigma.ids', quote=FALSE, col.names=FALSE, row.names=FALSE)
+system(paste('hmmfetch', '-o reviewed.sigmas.hmm', '-f sfam.hmm', '../data/reviewed/sigma.ids'))
+system(paste('hmmpress', 'reviewed.sigmas.hmm'))
+@
+Each predicted proteome of each bacterial species in IMG v400 was then searched against this new database (the commands for this can be found in '../data/sigma.hmm.cmds').
 
 \section{Results}
 
