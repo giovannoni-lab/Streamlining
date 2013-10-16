@@ -1,0 +1,15 @@
+\usepackage{parskip} % puts a line between paragraphs and doesn't indent.
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage[superscript,nomove]{cite}
+\begin{document}
+\author{Ben Temperton}
+\date{}
+\title{Investigating streamlining in bacterial genomes}
+\maketitle
+\section{Introduction}
+
+
+
+
+\end{document}

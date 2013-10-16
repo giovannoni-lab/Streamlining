@@ -11,6 +11,7 @@
 suppressMessages(library(ape))
 suppressMessages(library(plyr))
 suppressMessages(library(xtable))
+suppressMessages(library(ggplot2))
 options(width=60, digits=3)
 @
 \title{Genome Streamlining and the loss of $\sigma$-factors}
@@ -204,7 +205,7 @@ print(xtable(m, caption='COG members of SFam 346925'))
 
 Therefore, it was decided that there was no evidence of cross-function in the \Sexpr{length(unique(img.reviewed.sfam.map$sfam.id))} identified SFams and that these SFams could successfully be used to identify $\sigma$-factors in IMG bacterial genomes without an abundance of false positives.
 
-<<example.tree, fig.show='asis', fig.width=4, fig.cap='Example phylogenetic tree used to create SFam 18122', echo=FALSE>>=
+<<example.tree, fig.show='asis', fig.width=4, fig.cap='Example phylogenetic tree used to create SFam 18122', echo=FALSE, out.width="0.9\\textwidth">>=
 plot.phylo(read.tree('../data/trees/18122.tree'), cex=0.7)
 @
 
@@ -216,11 +217,169 @@ write.table(unique(img.reviewed.sfam.map$sfam.id), '../data/reviewed.sigma.ids',
 system(paste('hmmfetch', '-o reviewed.sigmas.hmm', '-f sfam.hmm', '../data/reviewed/sigma.ids'))
 system(paste('hmmpress', 'reviewed.sigmas.hmm'))
 @
-Each predicted proteome of each bacterial species in IMG v400 was then searched against this new database (the commands for this can be found in '../data/sigma.hmm.cmds').
+Each predicted proteome of each bacterial species in IMG v400 was then searched against this new database (the commands for this can be found in '../data/sigma.hmm.cmds'). Each of the 4,470 HMMER output files created was parsed to count the total number of unique proteins identified as $\sigma$-factors in each bacterial species along with mean GC \%, total genome length and total number of proteins.
+<<tidy=TRUE, eval=FALSE, engine='python'>>=
+from Bio import SeqIO
+from Bio.SeqUtils import GC
+import glob
+import os
+import numpy as np
+import sys, traceback
+print 'img.species.id\tsigma.count\tgenome.length\tmean.gc\tprotein_count'
+for file in glob.glob('sigma.tbl/*.tbl'):
+  sigma_factors = set()
+	gc_list = []
+	mean_gc = 0
+	genome_len = 0
+	protein_count = 0 
+	bacteria_id = os.path.basename(file).split('.')[0]
+	with open(file, 'rU') as handle:
+		for line in handle.readlines():
+			if line.startswith('#'):
+				continue
+			bits = line.split()
+			sigma_factors.add(bits[2])
+	with open('img_v400/uncompressed_files/%s/%s.fna' % (bacteria_id, bacteria_id), 'rU') as handle:
+		for seq_record in SeqIO.parse(handle, "fasta"):
+			genome_len += len(seq_record.seq)
+			gc_list.append(GC(seq_record.seq))
+		mean_gc = np.mean(gc_list)
+	with open('img_v400/uncompressed_files/%s/%s.genes.faa' % (bacteria_id, bacteria_id), 'rU') as handle:
+		for seq_record in SeqIO.parse(handle, "fasta"):
+			protein_count +=1
+
+	print '%s\t%i\t%i\t%.4f\t%i' % (bacteria_id, len(sigma_factors), genome_len, mean_gc, protein_count)
+@
+
+\subsection{Identifying sigma-factor homologs in bacterial genomes using non-reviewed $\sigma$-factors}
+<<tidy=TRUE>>=
+no.review<-read.delim('../data/no.review.best.model.txt')
+no.review.counts<-with(no.review, tapply(target_name, query_name, function(x)length(unique(x))))
+reviewed<-as.character(unique(img.reviewed.sfam.map$sfam.id))
+@
+
+The above was repeating using the complete list of \Sexpr{sum(no.review.counts)} non-reviewed $\sigma$-factor sequences in Uniprot to see if it was feasible to increase the number of SFams associated with $\sigma$-factors, without including an excess of false positives. This extended search list recruited \Sexpr{nrow(no.review.counts)} best-hit SFams. Of the \Sexpr{sum(no.review.counts)} non-reviewed $\sigma$-factors, \Sexpr{sum(no.review.counts[reviewed], na.rm=TRUE)} (\Sexpr{100*sum(no.review.counts[reviewed], na.rm=TRUE)/sum(no.review.counts)}\%) were accounted for by the \Sexpr{nrow(reviewed)} SFams captured from reviewed sequences. Verification of other SFams for non-reviewed $\sigma$-factors showed considerable heterogeneity of annotation. Therefore, it was decided to use only SFams identified by reviewed Uniprot $\sigma$-sequences for the purpose of annotating the $\sigma$-factors in bacterial genomes.
+
+\subsection{Data clean-up}
+Data provided by the annotation of IMG v400 bacterial genomes using the \Sexpr{nrow(reviewed)} SFams from reviewed Uniprot $\sigma$-factor sequences was cleaned as follows:
+\begin{itemize}
+\item Bacterial species with genomes < 0.1 Mbp were removed, as these were smaller than the smallest known genomes of highly-streamlined symbionts\cite{McCutcheon:2012jm}
+\item Bacterial species with genomes > 15 Mbp were removed (typically metagenomes)
+\item Species with fewer than 10 proteins were removed
+\item The genome of \emph{Clostridium carboxidivorans} P7 was removed as it has a genome size of 5.4 Mbp, but allegedly contains 22,373 genes (most of which are small hypothetical proteins)
+\item There are two versions of HTCC2255 in the IMG v400 database, one of which contains contaminants. The genome containing contaminants was removed.
+\end{itemize}
+
+<<sigma.count.filter, tidy=TRUE>>=
+library(ggplot2)
+count.data<-read.delim('../data/sigma.counts')
+genome.size.filtered<-subset(count.data, genome.length<1.5e7&genome.length>1e5)
+protein.size.filtered<-subset(genome.size.filtered, protein_count>10)
+protein.size.filtered<-subset(protein.size.filtered, protein_count<20000)
+protein.size.filtered<-subset(protein.size.filtered, img.species.id != 2517572075)
+@
+After clean-up, \Sexpr{nrow(protein.size.filtered)} species remained. Plotting number of proteins vs. genome size of this remaining data shows a well-established linear relationship (Figure \ref{fig:protein.vs.genome.size}).
+<<protein.vs.genome.size, echo=FALSE, fig.cap='Number of proteins as a function of genome size for IMG v400 bacterial genomes', fig.show='asis', out.width="0.9\\textwidth">>=
+protein.linear.model<-lm(protein_count~genome.length, data=protein.size.filtered)
+
+ggplot(data=protein.size.filtered, aes(genome.length, protein_count)) +
+  theme_bw() + 
+  geom_point() +
+  geom_smooth(method='lm') +
+  labs(x='Genome Length (bp)', y='Number of proteins')
+@
+It is clear from Figure \ref{fig:protein.vs.genome.size} that some bacterial genomes in IMG v400 contain far more or far fewer proteins than can be expected from their genome size. It was decided to exclude these taxa from the $\sigma$-factor analysis to avoid any potential impact of mis-calling of proteins on the number of identified $\sigma$-factors. Therefore, bacterial genomes were excluded whose protein counts were outside 2 standard deviations of the regression line in Figure \ref{fig:protein.vs.genome.size}:
+<<exclude.by.2sd>>=
+min.rsd<- -(2*sd(protein.linear.model$residuals))
+max.rsd<- 2*sd(protein.linear.model$residuals)
+protein.size.filtered$include<-protein.linear.model$residuals>min.rsd&protein.linear.model$residuals<max.rsd
+final.filtered<-subset(protein.size.filtered, include==TRUE)
+@
+
+Analysis of the number of $\sigma$-factors in the remaining \Sexpr{nrow(final.filtered)} genomes was then performed.
 
 \section{Results}
+The relationship between the number of $\sigma$-factors and genome length is shown in Figure \ref{fig:sigma.vs.genome.size}.
+<<sigma.vs.genome.size, fig.cap='Number of sigma factors vs. genome size in IMG bacterial genomes', fig.show='asis', echo=FALSE, out.width="0.9\\textwidth">>=
+final.filtered$type<-'Other'
+final.filtered$SAG<-FALSE
+final.filtered$streamlined<-FALSE
+sar.11.ids<-scan('../data/sar11.ids')
+prochlorococcus.ids<-scan('../data/prochlorococcus.ids')
+symbiont.ids<-scan('../data/symbiont.ids')
+roseobacter.ids<-scan('../data/roseobacter.ids')
+vibrio.ids<-scan('../data/vibrio.ids')
+alteromonas.ids<-scan('../data/alteromonas.ids')
+htcc2255.id<-c(639857003)
+bacteroidetes.ids<-scan('../data/bacteroidetes.ids')
+verrucomicrobia.ids<-scan('../data/verrucomicrobia.ids')
+final.filtered[final.filtered$img.species.id %in% sar.11.ids, ]$type<-'SAR11'
+final.filtered[final.filtered$img.species.id %in% prochlorococcus.ids, ]$type<-'Prochlorococcus'
+final.filtered[final.filtered$img.species.id %in% htcc2255.id, ]$type<-'Rhodobacteraceae'
+final.filtered[final.filtered$img.species.id %in% symbiont.ids, ]$type<-'Symbiont'
+final.filtered[final.filtered$img.species.id %in% roseobacter.ids, ]$type<-'Rhodobacteraceae'
+final.filtered[final.filtered$img.species.id %in% vibrio.ids, ]$type<-'Vibrionaceae'
+final.filtered[final.filtered$img.species.id %in% alteromonas.ids, ]$type<-'Alteromonadaceae'
+final.filtered[final.filtered$img.species.id %in% bacteroidetes.ids, ]$type<-'Bacteroidetes'
+final.filtered[final.filtered$img.species.id %in% verrucomicrobia.ids, ]$type<-'Verrucomicrobia'
+
+streamlined.ids<-c(sar.11.ids, prochlorococcus.ids, htcc2255.id, symbiont.ids)
+final.filtered[final.filtered$img.species.id %in% streamlined.ids, ]$streamlined<-TRUE
+final.streamlined<-subset(final.filtered, streamlined==TRUE)
+background<-subset(final.filtered, type=='Other'&streamlined==FALSE)
+named.types<-c('Rhodobacteraceae', 'Vibrionaceae', 'Alteromonadaceae', 'Bacteroidetes', 'Verrucomicrobia')
+named.non.streamlined<-subset(final.filtered, streamlined==FALSE & type %in% named.types)
+qpois.model<-glm(sigma.count~genome.length, data=final.filtered, quasipoisson)
+library(MASS)
+nb.model<-glm.nb(sigma.count~genome.length, data=final.filtered, link='log')
+predicted.data<-data.frame(genome.length=round(seq.int(from=0, to=1e7, length.out=length(background$genome.length))))
+G<-predict(nb.model, newdata=predicted.data, type='link', se=TRUE)
+predicted.data$fit<-exp(G$fit)
+predicted.data$upper<-exp(G$fit + 1.96 * G$se.fit)
+predicted.data$lower<-exp(G$fit - 1.96 * G$se.fit)
+model.colour="#009E73"
+p<-ggplot(data=background, aes(genome.length, sigma.count)) +
+  theme_bw(base_size = 16) +
+  geom_point(col='gray') + 
+  geom_point(data=final.streamlined, aes(genome.length, sigma.count, color=type, shape='2')) +
+  geom_point(data=named.non.streamlined, aes(genome.length, sigma.count, color=type, shape='1')) +
+  geom_ribbon(aes(predicted.data$genome.length, ymin=predicted.data$lower, ymax=predicted.data$upper), alpha=0.4, colour=model.colour, fill=model.colour) +
+  geom_line(aes(predicted.data$genome.length, predicted.data$fit), size=1, color=model.colour) +
+  labs(x='Genome Length (bp)', y=expression(paste('Number of ', sigma,  '-factor homologs', sep='')))
+print(p)
+@
+
+Fitting a Poisson model to the data showed evidence of overdispersion ($\phi=5.50$), therefore a negative-binomial model with a log-link was fitted. The explained deviance (glm equivalent of $r^{2}$) of the negative binomial model was \Sexpr{100*((nb.model$null.deviance-nb.model$deviance)/nb.model$null.deviance)} \%. The model predicts a minimum of \Sexpr{nb.model$coefficients[1]} $\sigma$-factors per genome. 
+
+\subsection{Evaluating the genomes from Swan et al\cite{Swan:2013ci}}
+From a total of 56 single amplified genomes (SAGs) from  marine surface water, 41 recovered genomes were >0.75Mbp in size and >30\% complete.
+<<swan.data>>=
+swan<-read.delim('../data/swan.sigma.counts')
+swan$include<-TRUE
+for.display<-rbind(final.filtered, swan)
+
+@
+<<final.sigma.vs.genome.size, fig.cap='Number of sigma factors vs. genome size in IMG bacterial genomes', fig.show='asis', echo=FALSE, out.width="0.9\\textwidth">>=
+  
+display.streamlined<-subset(for.display, streamlined==TRUE)
+display.named.non.streamlined<-subset(for.display, streamlined==FALSE & type %in% named.types)
+p<-ggplot(data=background, aes(genome.length, sigma.count)) +
+  theme_bw(base_size = 16) +
+  geom_point(col='gray', alpha=0.3) + 
+  geom_point(data=display.streamlined, aes(genome.length, sigma.count, color=type, shape=SAG, size=4)) +
+  geom_point(data=display.named.non.streamlined, aes(genome.length, sigma.count, color=type, shape=SAG)) +
+  geom_ribbon(aes(predicted.data$genome.length, ymin=predicted.data$lower, ymax=predicted.data$upper), alpha=0.4, colour=model.colour, fill=model.colour) +
+  geom_line(aes(predicted.data$genome.length, predicted.data$fit), size=1, color=model.colour) +
+  labs(x='Genome Length (bp)', y=expression(paste('Number of ', sigma,  '-factor homologs', sep=''))) +
+  xlim(0, 4.5e6) + 
+  ylim(0, 40) + 
+  scale_shape(solid=FALSE)
+print(p)
+@
+
 
 \section{Conclusion}
+
 
 \bibliography{sigma.factors.bib}
 \bibliographystyle{unsrt}

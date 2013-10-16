@@ -1,0 +1,15 @@
+	condition
+1000m	deep
+770m	deep
+500m	deep
+25m	surface
+lowerEu	surface
+surface	surface
+upperMes	deep
+CHOMZ.surface	surface
+CHOMZ.200m	surface
+CHOMZ.500m	deep
+CHOMZ.800m	deep
+PRT	deep
+MATA	deep
+MARM	deep
