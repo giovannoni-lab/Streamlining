@@ -25,3 +25,9 @@ scripts/texput.log
 scripts/example_tree.pdf
 
 scripts/figure/example_tree.pdf
+
+.DS_Store
+
+scripts/investigating.streamlining.synctex.gz
+
+*.tex

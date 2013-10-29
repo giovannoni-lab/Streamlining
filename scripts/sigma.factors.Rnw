@@ -5,13 +5,13 @@
 \usepackage[superscript,nomove]{cite}
 \begin{document}
 \author{Ben Temperton}
-\date{}
 %this setup uses functions in .Rprofile from http://biostat.mc.vanderbilt.edu/wiki/Main/KnitrHowto#Plots
 <<echo=FALSE>>==
 suppressMessages(library(ape))
 suppressMessages(library(plyr))
 suppressMessages(library(xtable))
 suppressMessages(library(ggplot2))
+suppressMessages(library(grid))
 options(width=60, digits=3)
 @
 \title{Genome Streamlining and the loss of $\sigma$-factors}
@@ -294,6 +294,9 @@ min.rsd<- -(2*sd(protein.linear.model$residuals))
 max.rsd<- 2*sd(protein.linear.model$residuals)
 protein.size.filtered$include<-protein.linear.model$residuals>min.rsd&protein.linear.model$residuals<max.rsd
 final.filtered<-subset(protein.size.filtered, include==TRUE)
+#IMG contains some duplicates:
+duplicate.ids<-scan('../data/duplicated.species.ids')
+final.filtered<-final.filtered[!(final.filtered$img.species.id %in% duplicate.ids),]
 @
 
 Analysis of the number of $\sigma$-factors in the remaining \Sexpr{nrow(final.filtered)} genomes was then performed.
@@ -363,7 +366,7 @@ for.display<-rbind(final.filtered, swan)
   
 display.streamlined<-subset(for.display, streamlined==TRUE)
 display.named.non.streamlined<-subset(for.display, streamlined==FALSE & type %in% named.types)
-p<-ggplot(data=background, aes(genome.length, sigma.count)) +
+detailed.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   theme_bw(base_size = 16) +
   geom_point(col='gray', alpha=0.3) + 
   geom_point(data=display.streamlined, aes(genome.length, sigma.count, color=type, shape=SAG, size=4)) +
@@ -374,7 +377,19 @@ p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   xlim(0, 4.5e6) + 
   ylim(0, 40) + 
   scale_shape(solid=FALSE)
-print(p)
+#print(detailed.p)
+
+full.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
+  theme_bw(base_size = 16) +
+  geom_point(col='gray') +
+  geom_ribbon(aes(predicted.data$genome.length, ymin=predicted.data$lower, ymax=predicted.data$upper), alpha=0.3) +
+  geom_line(aes(predicted.data$genome.length, predicted.data$fit), size=1) +
+  labs(x='Genome Length (bp)', y=expression(paste('Number of ', sigma,  '-factor homologs', sep='')))
+#print(full.p)
+
+vp<-viewport(width=0.4, height=0.4, x=2e6, y=20, just='left')
+print(detailed.p)
+print(full.p)
 @
 
 

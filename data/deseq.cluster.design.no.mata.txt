@@ -11,5 +11,4 @@ CHOMZ.200m	deep
 CHOMZ.500m	deep
 CHOMZ.800m	deep
 PRT	deep
-MATA	deep
 MARM	deep
