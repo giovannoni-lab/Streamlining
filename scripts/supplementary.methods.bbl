@@ -1,0 +1,42 @@
+\begin{thebibliography}{1}
+
+\bibitem{Swan:2013ci}
+Brandon~K. Swan, Ben Tupper, Alexander Sczyrba, Federico~M Lauro, Manuel
+  Martinez-Garcia, Jos{\'e}~M Gonz{\'a}lez, Haiwei Luo, Jody~J Wright,
+  Zachary~C Landry, Niels~W Hanson, Brian~P Thompson, Nicole~J Poulton, Patrick
+  Schwientek, Silvia~G Acinas, Stephen~J Giovannoni, Mary~Ann Moran, Steven~J
+  Hallam, Ricardo Cavicchioli, Tanja Woyke, and Ramunas Stepanauskas.
+\newblock {Prevalent genome streamlining and latitudinal divergence of
+  planktonic bacteria in the surface ocean.}
+\newblock {\em Proceedings of the National Academy of Sciences of the United
+  States of America}, 110(28):11463--11468, July 2013.
+
+\bibitem{koonin2008genomics}
+Eugene~V Koonin and Yuri~I Wolf.
+\newblock Genomics of bacteria and archaea: the emerging dynamic view of the
+  prokaryotic world.
+\newblock {\em Nucleic acids research}, 36(21):6688--6719, 2008.
+
+\bibitem{hartigan1985dip}
+John~A Hartigan and PM~Hartigan.
+\newblock The dip test of unimodality.
+\newblock {\em The Annals of Statistics}, pages 70--84, 1985.
+
+\bibitem{FMR:FMR127}
+M.M.S.M W{\"o}sten.
+\newblock Eubacterial sigma-factors.
+\newblock {\em FEMS Microbiology Reviews}, 22(3):127--150, 1998.
+
+\bibitem{Sharpton:2012kv}
+Thomas~J Sharpton, Guillaume Jospin, Dongying Wu, Morgan~Gi Langille,
+  Katherine~S Pollard, and Jonathan~A Eisen.
+\newblock {Sifting through genomes with iterative-sequence clustering produces
+  a large, phylogenetically diverse protein-family resource.}
+\newblock {\em BMC Bioinformatics}, 13(1):264, October 2012.
+
+\bibitem{McCutcheon:2012jm}
+John~P McCutcheon and Nancy~A Moran.
+\newblock {Extreme genome reduction in symbiotic bacteria.}
+\newblock {\em Nature Reviews Microbiology}, 10(1):13--26, January 2012.
+
+\end{thebibliography}

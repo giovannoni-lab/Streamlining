@@ -4,32 +4,191 @@
 \usepackage{url}
 \usepackage[superscript,nomove]{cite}
 \begin{document}
-\author{Ben Temperton}
-%this setup uses functions in .Rprofile from http://biostat.mc.vanderbilt.edu/wiki/Main/KnitrHowto#Plots
+\author{Stephen J. Giovannoni, J. Cameron Thrash, Ben Temperton}
+\title{Implications of Streamlining Theory for Microbial Ecology - Supplementary Methods}
 <<echo=FALSE>>==
+def.par <- par(no.readonly = TRUE)
 suppressMessages(library(ape))
 suppressMessages(library(plyr))
 suppressMessages(library(xtable))
 suppressMessages(library(ggplot2))
-suppressMessages(library(grid))
+suppressMessages(library(gridExtra))
 options(width=50, digits=3, tidy=TRUE)
 @
-\title{Genome Streamlining and the loss of $\sigma$-factors}
 \maketitle
-\section{Introduction}
+\tableofcontents
+\section{Statement of Reproducibility}
+This document was created using knitr (http://yihui.name/knitr/) and is available as a runnable document with all raw data on the Giovannoni Lab GitHub repository (git@github.com:giovannoni-lab/Streamlining.git).
+
+\section{Preparation of Figure 2}
+\subsection{Data Preparation}
+<<load.data>>=
+raw.df<-read.delim('../data/raw_img_bacteria.txt.gz', header=TRUE)
+colnames(raw.df)<-read.table('../data/img.col.names')$V1
+#IMG contains some duplicates:
+duplicate.ids<-scan('../data/duplicated.species.ids')
+raw.df<-raw.df[!(raw.df$img.species.id %in% duplicate.ids),]
+raw.df$img.species.id<-as.factor(raw.df$img.species.id)
+raw.df<-subset(raw.df, GenomeSize<1.0e7&GenomeSize>1e5)
+raw.df$non.coding<-100-raw.df$CodingBaseCountNPPct
+@
+Now let's remove anything that is a SAG, and anything with more than 35 \% noncoding DNA. Then let's label up the points for displaying on the figure. 
+<<remove.sags, echo=TRUE>>=
+sag.ids<-raw.df[grep('AAA', raw.df$GenomeName),]$img.species.id
+no.sags<-raw.df[!(raw.df$img.species.id %in% sag.ids),]
+no.sags<-subset(no.sags, non.coding<35)
+no.sags$type<-'Other'
+sar.11.ids<-scan('../data/sar11.ids')
+prochlorococcus.ids<-scan('../data/prochlorococcus.ids')
+symbiont.ids<-scan('../data/symbiont.ids')
+roseobacter.ids<-scan('../data/roseobacter.ids')
+vibrio.ids<-scan('../data/vibrio.ids')
+alteromonas.ids<-scan('../data/alteromonas.ids')
+htcc2255.id<-c(639857003)
+OM43.ids<-c(639857020)
+bacteroidetes.ids<-scan('../data/bacteroidetes.ids')
+verrucomicrobia.ids<-scan('../data/verrucomicrobia.ids')
+no.sags[no.sags$img.species.id %in% sar.11.ids, ]$type<-'SAR11'
+no.sags[no.sags$img.species.id %in% prochlorococcus.ids, ]$type<-'Prochlorococcus'
+no.sags[no.sags$img.species.id %in% htcc2255.id, ]$type<-'Rhodobacteraceae'
+no.sags[no.sags$img.species.id %in% symbiont.ids, ]$type<-'Symbiont'
+no.sags[no.sags$img.species.id %in% roseobacter.ids, ]$type<-'Rhodobacteraceae'
+no.sags[no.sags$img.species.id %in% vibrio.ids, ]$type<-'Vibrionaceae'
+no.sags[no.sags$img.species.id %in% alteromonas.ids, ]$type<-'Alteromonadaceae'
+#no.sags[no.sags$img.species.id %in% bacteroidetes.ids, ]$type<-'Bacteroidetes'
+no.sags[no.sags$img.species.id %in% verrucomicrobia.ids, ]$type<-'Verrucomicrobia'
+no.sags[no.sags$img.species.id %in% OM43.ids, ]$type<-'OM43'
+
+swan<-read.delim('../data/swan.sigma.counts')
+@
+Now we can calculate \% of non-coding bases in the SAGs from Swan et al\cite{Swan:2013ci}.
+<<echo=TRUE, eval=FALSE, engine='python'>>=
+import os
+import glob
+from Bio import SeqIO
+outfile = open('swan.non.coding.pct', 'w')
+outfile.write('img.species.id\tnon.coding\n')
+for f in glob.glob('./contigs/*.fasta'):
+  root, ext = os.path.splitext(os.path.basename(f))
+  genome_size = 0.0
+	coding_size = 0.0
+	with open(f, 'rU') as handle:
+		for seq_record in SeqIO.parse(handle, 'fasta'):
+			genome_size += len(seq_record.seq)
+	with open('./dna/%s.fasta' % root, 'rU') as handle:
+		for seq_record in SeqIO.parse(handle, 'fasta'):
+			coding_size += len(seq_record.seq)
+	outfile.write('%s\t%.4f\n' % (root, 100-(coding_size*100/genome_size)))
+outfile.close()
+@
+Now we can join this to the Swan dataset (Figure \ref{fig:plot.non.coding})
+<<join.dataframes, echo=TRUE>>=
+swan.non.coding<-read.delim('../data/swan.non.coding.pct')
+swan<-join(swan, swan.non.coding)
+@
+
+\begin{figure}[H]
+<<plot.non.coding, echo=FALSE>>=
+add_points<-function(data, typeName, color){
+  s<-subset(data, type==typeName)
+  points(s$GenomeSize/1e6, s$non.coding, pch=16, col=color, cex=1.0)
+}
+
+zones=matrix(c(2,0,1,3), ncol=2, byrow=TRUE)
+layout(zones, widths=c(4/5,1/5), heights=c(1/5,4/5))
+background<-subset(no.sags, type=='Other')
+x=no.sags$GenomeSize/1e6
+y= no.sags$non.coding
+lin.model<-lm(y~x)
+xhist = hist(x, plot=FALSE, breaks=100)
+yhist = hist(y, plot=FALSE, breaks=100)
+top = max(c(xhist$counts, yhist$counts))
+op<-par(mar=c(3,3,1,1))
+plot(background$GenomeSize/1e6, background$non.coding, pch=16, cex=0.5, col='gray')
+
+
+add_points(no.sags, 'Vibrionaceae', '#FF67A4')
+add_points(no.sags, 'Rhodobacteraceae', '#00C0AF')
+add_points(no.sags, 'Symbiont', '#E76BF3')
+add_points(no.sags, 'Alteromonadaceae', '#E58700')
+add_points(no.sags, 'SAR11', 'red')
+add_points(no.sags, 'Prochlorococcus', '#1FFF66')
+add_points(no.sags, 'OM43', '#33FFFF')
+points(swan$egs/1e6, swan$non.coding, pch=16, cex=1.0, col='#9900FF')
+abline(lin.model)
+legend(6.5,35, c('Vibrionaceae', 'Rhodobacteraceae', 'Symbiont', 'Alteromonadaceae', 'SAR11', 'Prochlorococcus','OM43', 'SAG'), col=c('#FF67A4', '#00C0AF', '#E76BF3', '#E58700', 'red', '#1FFF66', '#33FFFF','#9900FF'), pch=16, pt.cex=1.5)
+op<-par(mar=c(0,3,1,1))
+barplot(xhist$counts, axes=TRUE, ylim=c(0, 200), space=0)
+par(mar=c(3,0,1,1))
+barplot(yhist$counts, axes=TRUE, xlim=c(0, top), space=0, horiz=TRUE)
+par(oma=c(3,3,0,0))
+mtext('Genome Length (Mbp)', side=1, line=1, outer=TRUE, adj=0, 
+  at=.8 * (mean(x) - min(x))/(max(x)-min(x)))
+mtext('% non-coding DNA', side=2, line=1, outer=TRUE, adj=0, 
+  at=(.8 * (mean(y) - min(y))/(max(y) - min(y))))
+par(def.par)
+@
+\caption{Genome Length vs. pct non-coding DNA}
+\label{fig:plot.non.coding}
+\end{figure}
+
+\subsection{Is the genome size distribution two populations?}
+The distribution of the genome sizes across the x-axis appears to display bi-modality, in agreement with previous work\cite{koonin2008genomics}. We can verify this using a Hartigan's Dip Test for non-unimodality\cite{hartigan1985dip} 
+<<hartigan, echo=TRUE, tidy=TRUE>>=
+library(diptest)
+dip.test(no.sags$GenomeSize)
+@
+Yes, there is evidence of non-unimodality in this population of genome sizes.
+
+\subsection{Is there an effect of partially complete genomes?}
+By using all of the genomes in IMG v400, we are plotting both complete, permanent draft and draft genomes onto Figure \ref{fig:plot.non.coding}. Therefore, it is worth testing whether we see a similar pattern when looking only at the genomes with the status of 'Finished' (Figure \ref{fig:finished.only})
+<<finished.only, echo=TRUE, fig.cap='Genome Length vs. pct non-coding DNA for Finished genomes', fig.show='asis', echo=TRUE, out.width="0.9\\textwidth">>=
+zones=matrix(c(2,0,1,3), ncol=2, byrow=TRUE)
+layout(zones, widths=c(4/5,1/5), heights=c(1/5,4/5))
+finished.only<-subset(no.sags, status=='Finished')
+finished.background<-subset(finished.only, type=='Other')
+x=finished.only$GenomeSize/1e6
+y= finished.only$non.coding
+finished.lin.model<-lm(y~x)
+xhist = hist(x, plot=FALSE, breaks=100)
+yhist = hist(y, plot=FALSE, breaks=100)
+top = max(c(xhist$counts, yhist$counts))
+op<-par(mar=c(3,3,1,1))
+plot(finished.background$GenomeSize/1e6, finished.background$non.coding, pch=16, cex=0.5, col='gray')
+add_points(finished.only, 'Vibrionaceae', '#FF67A4')
+add_points(finished.only, 'Rhodobacteraceae', '#00C0AF')
+add_points(finished.only, 'Symbiont', '#E76BF3')
+add_points(finished.only, 'Alteromonadaceae', '#E58700')
+add_points(finished.only, 'SAR11', 'red')
+add_points(finished.only, 'Prochlorococcus', '#1FFF66')
+add_points(finished.only, 'OM43', '#33FFFF')
+abline(finished.lin.model)
+legend(6.5,35, c('Vibrionaceae', 'Rhodobacteraceae', 'Symbiont', 'Alteromonadaceae', 'SAR11', 'Prochlorococcus','OM43', 'SAG'), col=c('#FF67A4', '#00C0AF', '#E76BF3', '#E58700', 'red', '#1FFF66', '#33FFFF','#9900FF'), pch=16, pt.cex=1.5)
+
+op<-par(mar=c(0,3,1,1))
+barplot(xhist$counts, axes=TRUE, ylim=c(0, 100), space=0)
+par(mar=c(3,0,1,1))
+barplot(yhist$counts, axes=TRUE, xlim=c(0, top), space=0, horiz=TRUE)
+par(oma=c(3,3,0,0))
+mtext('Genome Length (Mbp)', side=1, line=1, outer=TRUE, adj=0, 
+  at=.8 * (mean(x) - min(x))/(max(x)-min(x)))
+mtext('% non-coding DNA', side=2, line=1, outer=TRUE, adj=0, 
+  at=(.8 * (mean(y) - min(y))/(max(y) - min(y))))
+par(def.par)
+@
+Now, is there still a lack of unimodality?
+<<hartigan.finished, echo=TRUE, tidy=TRUE>>=
+dip.test(finished.only$GenomeSize)
+@
+No,there is no evidence for multi-modality in finished genomes only.
+
+\section{Genome Streamlining and the loss of $\sigma$-factors (Figure 3)}
+\subsection{Introduction}
 $\sigma$-factors are polypeptides that combine with DNA-dependent RNA polymerase (RNAP) to form an RNAP holoenzyme capable of transcribing the DNA template. The role of the $\sigma$-factor in the holoenzyme is two-fold: (i) RNAP is unable to initiate transcription without the $\sigma$-factor. (ii) The $\sigma$-subunit of the RNAP holoenzyme can recognize specific promotor sequences and can thus direct initiation of transcription to specific genes, orchestrating a metabolic and/or physiological response to changing environments\cite{FMR:FMR127}. 
 
 $\sigma$-factors control a broad range of processes. Housekeeping $\sigma$-factors, such as $\sigma^{70}$ in \em{Escherichia coli} (encoded by \em{rpoD}) are responsible for the transcription of most genes expressed in exponentially growing cells and it is thought that at least one copy of a $\sigma^{70}$-like homolog can be found in all bacterial genomes. Other non-essential $\sigma$-factors include stationary phase $\sigma$-factors (RpoS); flagellar $\sigma$-factors ($\sigma^{28}$, WhiG); heat-shock $\sigma$-factors ($\sigma^{32}$, SigB/C); sporulation $\sigma$-factors; nitrogen utilization $\sigma$-factors ($\sigma^{54}$); and a broad range of extracytoplasmic function (ECF) $\sigma$-factors controlling expression of, among other things, alginate biosynthesis, iron uptake, antibiotic production and virulence factors.
 
-Under genome streamlining theory, as niche complexity decreases, so too does the number of adaptive patahways required to occupy that niche. Because of the global nature of $\sigma$-regulation, loss of $\sigma$-factors as a result of genome streamlining may result from several mechanisms:
-\begin{itemize}
-  \item If one or more of the genes previously under $\sigma$-regulation become constitutive, the $\sigma$-factor must be maintained until such time as all regulated genes are either lost or made constitutive
-  \item If all genes previously under  $\sigma$-regulation are no longer required in a niche of lower complexity, then selective pressure on all regulated genes, \emph{including the $\sigma$-factor} is relaxed, leading to a rapid loss of function and step-wise genome reduction.
-\end{itemize}
-
-Therefore, unlike e.g. loss of specific transporters, or virulence factors, a reduction of $\sigma$-factors in streamlined genomes would serve an indicator that entire pathways have either been lost or rendered constitutive. 
-
-\section{Method}
+\subsection{Method}
 \subsection{Identifying best representative SFam Hidden Markov models for $\sigma$-factors}
 The number of $\sigma$-factor homologs in streamlined and non-streamlined bacterial genomes in the \href{https://img.jgi.doe.gov/cgi-bin/er/main.cgi}{IMG v400} database was evaluated as follows:
 
@@ -37,10 +196,16 @@ The number of $\sigma$-factor homologs in streamlined and non-streamlined bacter
 uniprot<-read.delim('../data/uniprot.sigma.factors.tab')
 @
 
-A search for the keyword 'sigma factor' in \href{http://www.uniprot.org/uniprot/?query=keyword\%3AKW-0731&format=*}{Uniprot} resulted in 71,070 results, of which 255 had been reviewed. To restrict the search to bacterial $\sigma$-factors, 7 sequences from Caudovirales and  6 from \emph{Arabidopsis thaliana} were removed, leaving 242 $\sigma$-factor sequences from \Sexpr{length(unique(uniprot$Organism))} unique organisms:
+A search for the keyword 'sigma factor' in \href{http://www.uniprot.org/uniprot/?query=keyword\%3AKW-0731&format=*}{Uniprot} resulted in 71,070 results, of which 255 had been reviewed. To restrict the search to bacterial $\sigma$-factors, 7 sequences from Caudovirales and  6 from \emph{Arabidopsis thaliana} were removed, leaving 242 $\sigma$-factor sequences from \Sexpr{length(unique(uniprot$Organism))} unique organisms (Figure \ref{fig:uniprot.pie}).
 
-%\begin{figure}
+
+\begin{figure}[H]
 \includegraphics[width=0.9\textwidth]{../images/sig_factor_pie.png}
+\caption{Reviewed $\sigma$-factor sequences in Uniprot}
+\label{fig:uniprot.pie}
+\end{figure}
+%\begin{figure}
+%\includegraphics[width=0.9\textwidth]{../images/sig_factor_pie.png}
 %\label{fig:uniprot.pie}
 %\end{figure}
 
@@ -105,7 +270,9 @@ write.table(img.reviewed.sfam.map$img.id, '../data/img.reviewed.sigma.ids', sep=
 
 For each IMG id, let's get the species and the annotation.
 <<eval=FALSE, tidy=TRUE>>=
-cat img.reviewed.sigma.ids | sed 's/^/lcl|/g' | blastdbcmd -entry_batch - -outfmt %t -db /ubique2/common/img_v400/img_v400_PROT | sed 's/\([0-9]\+\)\s\+\(.*\)\s\+\[\(.*\)\].*/\1\t\2\t\3/g' >> img.reviewed.sigma.anno
+cat img.reviewed.sigma.ids | sed 's/^/lcl|/g' | 
+  blastdbcmd -entry_batch - -outfmt %t -db /ubique2/common/img_v400/img_v400_PROT | 
+  sed 's/\([0-9]\+\)\s\+\(.*\)\s\+\[\(.*\)\].*/\1\t\2\t\3/g' >> img.reviewed.sigma.anno
 @
 <<echo=FALSE>>=
 img.reviewed.sigma.anno<-read.delim('../data/img.reviewed.sigma.anno', header=FALSE)
@@ -152,9 +319,10 @@ outfile.write('img.id\tcog.id\tgene.length\n')
 for l in lines:
   l = l.strip()
   bits = l.split('\t')
-	img_id = bits[2]
+  img_id = bits[2]
 	img_species_id = bits[4]
-	path_name_to_cog = 'img_v400/uncompressed_files/%s/%s.cog.tab.txt' % (img_species_id, img_species_id)
+	path_name_to_cog = 'img_v400/uncompressed_files/%s/%s.cog.tab.txt' % \
+    (img_species_id, img_species_id)
 	cog_id = 'NA'
 	gene_length='NA'
 	if os.path.exists(path_name_to_cog):
@@ -239,16 +407,19 @@ for file in glob.glob('sigma.tbl/*.tbl'):
 				continue
 			bits = line.split()
 			sigma_factors.add(bits[2])
-	with open('img_v400/uncompressed_files/%s/%s.fna' % (bacteria_id, bacteria_id), 'rU') as handle:
+	with open('img_v400/uncompressed_files/%s/%s.fna' % \
+            (bacteria_id, bacteria_id), 'rU') as handle:
 		for seq_record in SeqIO.parse(handle, "fasta"):
 			genome_len += len(seq_record.seq)
 			gc_list.append(GC(seq_record.seq))
 		mean_gc = np.mean(gc_list)
-	with open('img_v400/uncompressed_files/%s/%s.genes.faa' % (bacteria_id, bacteria_id), 'rU') as handle:
+	with open('img_v400/uncompressed_files/%s/%s.genes.faa' % \
+            (bacteria_id, bacteria_id), 'rU') as handle:
 		for seq_record in SeqIO.parse(handle, "fasta"):
 			protein_count +=1
 
-	print '%s\t%i\t%i\t%.4f\t%i' % (bacteria_id, len(sigma_factors), genome_len, mean_gc, protein_count)
+	print '%s\t%i\t%i\t%.4f\t%i' % \
+    (bacteria_id, len(sigma_factors), genome_len, mean_gc, protein_count)
 @
 
 \subsection{Identifying sigma-factor homologs in bacterial genomes using non-reviewed $\sigma$-factors}
@@ -301,7 +472,7 @@ final.filtered<-final.filtered[!(final.filtered$img.species.id %in% duplicate.id
 
 Analysis of the number of $\sigma$-factors in the remaining \Sexpr{nrow(final.filtered)} genomes was then performed.
 
-\section{Results}
+\subsection{Results}
 The relationship between the number of $\sigma$-factors and genome length is shown in Figure \ref{fig:sigma.vs.genome.size}.
 <<sigma.vs.genome.size, fig.cap='Number of sigma factors vs. genome size in IMG bacterial genomes', fig.show='asis', echo=FALSE, out.width="0.9\\textwidth">>=
 final.filtered$type<-'Other'
@@ -352,21 +523,20 @@ p<-ggplot(data=background, aes(genome.length, sigma.count)) +
 print(p)
 @
 
-Fitting a Poisson model to the data showed evidence of overdispersion ($\phi=5.50$), therefore a negative-binomial model with a log-link was fitted. The explained deviance (glm equivalent of $r^{2}$) of the negative binomial model was \Sexpr{100*((nb.model$null.deviance-nb.model$deviance)/nb.model$null.deviance)} \%. The model predicts a minimum of \Sexpr{nb.model$coefficients[1]} $\sigma$-factors per genome. 
+Fitting a Poisson model to the data showed evidence of overdispersion ($\phi=5.50$), therefore a negative-binomial model with a log-link was fitted. The explained deviance (glm equivalent of $r^{2}$) of the negative binomial model was \Sexpr{100*((nb.model$null.deviance-nb.model$deviance)/nb.model$null.deviance)} \%. The model predicts a minimum of \Sexpr{nb.model$coefficients[1]} $\sigma$-factors per genome. Figure \ref{fig:final.sigma.vs.genome.size} shows a zoomed in version of Figure \ref{fig:sigma.vs.genome.size} used in the manuscript, with the insert (Figure \ref{fig:insert})
 
-\subsection{Evaluating the genomes from Swan et al\cite{Swan:2013ci}}
-From a total of 56 single amplified genomes (SAGs) from  marine surface water, 41 recovered genomes were >0.75Mbp in size and >30\% complete.
-<<swan.data>>=
+<<swan.data, echo=FALSE>>=
 swan<-read.delim('../data/swan.sigma.counts')
 swan$include<-TRUE
-for.display<-rbind(final.filtered, swan)
+for.display<-rbind(final.filtered, swan[, c(1,2,3,6,7,11,8,10,9)])
 
 @
-<<final.sigma.vs.genome.size, fig.cap='Number of sigma factors vs. genome size in IMG bacterial genomes', fig.show='asis', echo=FALSE, out.width="0.9\\textwidth">>=
+
+<<echo=FALSE>>=
   
 display.streamlined<-subset(for.display, streamlined==TRUE)
 display.named.non.streamlined<-subset(for.display, streamlined==FALSE & type %in% named.types)
-detailed.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
+invisible(detailed.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   theme_bw(base_size = 16) +
   geom_point(col='gray', alpha=0.3) + 
   geom_point(data=display.streamlined, aes(genome.length, sigma.count, color=type, shape=SAG, size=4)) +
@@ -376,9 +546,21 @@ detailed.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   labs(x='Genome Length (bp)', y=expression(paste('Number of ', sigma,  '-factor homologs', sep=''))) +
   xlim(0, 4.5e6) + 
   ylim(0, 40) + 
-  scale_shape(solid=FALSE)
+  scale_shape(solid=FALSE))
+invisible(dev.off())
 #print(detailed.p)
+@
+\begin{figure}[H]
+<<>>=
+print(detailed.p)
+@
+\caption{Number of sigma factors vs. genome size in IMG bacterial genomes}
+\label{fig:final.sigma.vs.genome.size}
+\end{figure}
 
+
+\begin{figure}[H]
+<<echo=FALSE>>=
 full.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   theme_bw(base_size = 16) +
   geom_point(col='gray') +
@@ -386,16 +568,15 @@ full.p<-ggplot(data=background, aes(genome.length, sigma.count)) +
   geom_line(aes(predicted.data$genome.length, predicted.data$fit), size=1) +
   labs(x='Genome Length (bp)', y=expression(paste('Number of ', sigma,  '-factor homologs', sep='')))
 #print(full.p)
-
 vp<-viewport(width=0.4, height=0.4, x=2e6, y=20, just='left')
-print(detailed.p)
 print(full.p)
 @
-
-
-\section{Conclusion}
-
+\caption{Insert for Figure 3}
+\label{fig:insert}
+\end{figure}
 
 \bibliography{sigma.factors.bib}
 \bibliographystyle{unsrt}
+
+
 \end{document}

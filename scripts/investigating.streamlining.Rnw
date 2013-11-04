@@ -4,10 +4,10 @@
 \usepackage{url}
 \usepackage[superscript,nomove]{cite}
 \begin{document}
-\author{Ben Temperton}
-\date{}
+\author{Stephen J. Giovannoni, J. Cameron Thrash & Ben Temperton}
 \title{Investigating streamlining in bacterial genomes (Figure 1)}
 <<echo=FALSE>>==
+def.par <- par(no.readonly = TRUE)
 suppressMessages(library(ape))
 suppressMessages(library(plyr))
 suppressMessages(library(xtable))
@@ -121,7 +121,7 @@ mtext('Genome Length (Mbp)', side=1, line=1, outer=TRUE, adj=0,
   at=.8 * (mean(x) - min(x))/(max(x)-min(x)))
 mtext('% non-coding DNA', side=2, line=1, outer=TRUE, adj=0, 
   at=(.8 * (mean(y) - min(y))/(max(y) - min(y))))
-par(op)
+par(def.par)
 @
 \subsection{Is the genome size distribution two populations?}
 <<hartigan, echo=TRUE, tidy=TRUE>>=
@@ -164,7 +164,7 @@ mtext('Genome Length (Mbp)', side=1, line=1, outer=TRUE, adj=0,
   at=.8 * (mean(x) - min(x))/(max(x)-min(x)))
 mtext('% non-coding DNA', side=2, line=1, outer=TRUE, adj=0, 
   at=(.8 * (mean(y) - min(y))/(max(y) - min(y))))
-par(op)
+par(def.par)
 @
 Now, is there still a lack of unimodality?
 <<hartigan.finished, echo=TRUE, tidy=TRUE>>=
